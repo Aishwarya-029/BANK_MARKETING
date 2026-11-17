@@ -4,7 +4,7 @@ Predict whether a client will subscribe to a term deposit after a bank's direct 
 
 ## Problem
 
-A Portuguese bank ran phone-based marketing campaigns to sell term deposits. Calling every client is expensive, so the goal is to **rank or classify clients by how likely they are to say "yes"** and focus calls on the most promising ones.
+A Portuguese bank ran phone-based marketing campaigns to sell term deposits. Calling every client is expensive, so the goal is to predict which clients are likely to say "yes" and focus calls on them.
 
 - **Task:** binary classification
 - **Target:** `y` (`yes` / `no`: did the client subscribe?)
@@ -16,113 +16,67 @@ A Portuguese bank ran phone-based marketing campaigns to sell term deposits. Cal
 | File | `bank-additional-full.csv` |
 | Source | [UCI Machine Learning Repository: Bank Marketing](https://archive.ics.uci.edu/dataset/222/bank+marketing) |
 | Citation | Moro, S., Cortez, P., Rita, P. (2014). *A Data-Driven Approach to Predict the Success of Bank Telemarketing.* Decision Support Systems |
-| Rows / columns | 41,188 rows, 20 input features + 1 target |
+| Size | 41,188 rows, 20 input features + 1 target |
 | Format | Semicolon-separated (`sep=";"`) |
-| Missing values | None as `NaN`; missing info is encoded as the string `"unknown"` |
 
-```python
-import pandas as pd
-df = pd.read_csv("bank-additional-full.csv", sep=";")
-```
+Key facts about the data:
 
-### Features
-
-**Client data**
-
-| Column | Description |
-|---|---|
-| `age` | Age in years (17 to 98) |
-| `job` | Job type (12 categories, e.g. `admin.`, `technician`, `retired`) |
-| `marital` | Marital status (`married`, `single`, `divorced`, `unknown`) |
-| `education` | Education level (8 categories, from `illiterate` to `university.degree`) |
-| `default` | Has credit in default? (`yes` / `no` / `unknown`) |
-| `housing` | Has a housing loan? |
-| `loan` | Has a personal loan? |
-
-**Last contact of the current campaign**
-
-| Column | Description |
-|---|---|
-| `contact` | Contact channel (`cellular` / `telephone`) |
-| `month` | Month of last contact |
-| `day_of_week` | Day of week of last contact (`mon` to `fri`) |
-| `duration` | Last call duration in seconds (see the warning below) |
-
-**Campaign history**
-
-| Column | Description |
-|---|---|
-| `campaign` | Number of contacts made to this client during this campaign (includes the last one) |
-| `pdays` | Days since the client was last contacted in a previous campaign (`999` = never contacted before) |
-| `previous` | Number of contacts before this campaign |
-| `poutcome` | Outcome of the previous campaign (`success`, `failure`, `nonexistent`) |
-
-**Social and economic context** (quarterly/monthly indicators at the time of contact)
-
-| Column | Description |
-|---|---|
-| `emp.var.rate` | Employment variation rate |
-| `cons.price.idx` | Consumer price index |
-| `cons.conf.idx` | Consumer confidence index |
-| `euribor3m` | Euribor 3-month rate |
-| `nr.employed` | Number of employees (in thousands) |
-
-### Things to know about the data
-
-- **Class imbalance:** only **4,640 of 41,188 clients (11.3%)** said `yes`. Plain accuracy is misleading, since predicting "no" for everyone already scores about 88.7%. Use ROC-AUC, precision/recall, F1 or PR-AUC instead.
-- **`duration` causes target leakage:** call length is only known after the call ends, and a very short call almost always means `no`. It should be **dropped for any realistic predictive model**. Keep it only to build a benchmark, and say so clearly.
-- **`unknown` is a category, not a `NaN`:** it appears in `default` (8,597), `education` (1,731), `housing` (990), `loan` (990), `job` (330) and `marital` (80).
-- **`pdays = 999` is a code, not a real value:** it means "not previously contacted" and affects 39,673 rows (96%). Treat it as a flag rather than a number.
-- **Duplicates:** 12 fully duplicated rows.
-- **Time-ordered data:** rows follow the campaign timeline, so a random train/test split can leak future information. Consider a time-based split.
+- **Imbalanced target:** only 4,640 of 41,188 clients (11.3%) said `yes`.
+- **Missing values are coded as `"unknown"`** in `default`, `education`, `housing`, `loan`, `job` and `marital`.
+- **`duration` leaks the target:** call length is only known after the call, so it is excluded from the model.
+- **`pdays = 999`** means "not contacted before" and affects 96% of rows.
 
 ## Approach
 
-<!-- Edit this section to match what your notebooks/scripts actually do. -->
+All steps are in `Bank_Marketing.ipynb`.
 
-1. **Exploratory data analysis:** target balance, distributions, subscription rate by job, month, contact channel and previous outcome.
-2. **Preprocessing:** drop `duration`, handle `unknown` values, encode `pdays`, one-hot or target-encode categoricals, scale numeric features where needed.
-3. **Modeling:** baseline (logistic regression) versus tree-based models (random forest, gradient boosting), with class weighting or resampling for the imbalance.
-4. **Evaluation:** stratified cross-validation, ROC-AUC, precision/recall, confusion matrix, and feature importance.
+1. **EDA:** target balance, count plots for every categorical feature, box plots and histograms for numeric features, correlation heatmaps.
+2. **Cleaning:** replaced `unknown` with missing values and dropped those rows (38,245 of 41,188 rows kept). Dropped `default`, which showed almost no useful signal.
+3. **Feature selection:** dropped `duration` (target leakage), `emp.var.rate`, `nr.employed` and `euribor3m` (highly correlated with each other), and `pdays`, `previous` and `campaign`.
+4. **Encoding and scaling:** mapped yes/no columns to 1/0, one-hot encoded the other categorical columns, and scaled numeric features with `MinMaxScaler` fitted on the training set only. The model uses 38 features.
+5. **Model:** logistic regression (`C=0.1`) on an 80/20 train/test split (30,596 train rows, 7,649 test rows).
 
 ## Results
 
-<!-- Fill in with your real numbers; do not leave placeholders in the final version. -->
+Evaluated on the 7,649-row test set.
 
-| Model | ROC-AUC | Precision (yes) | Recall (yes) | F1 (yes) |
-|---|---|---|---|---|
-| Logistic Regression | | | | |
-| Random Forest | | | | |
-| Gradient Boosting | | | | |
+| Metric | Value |
+|---|---|
+| Accuracy | 0.895 |
+| ROC-AUC (test) | 0.749 |
+| ROC-AUC (train) | 0.760 |
+| Precision, `yes` class | 0.62 |
+| Recall, `yes` class | 0.16 |
+| F1, `yes` class | 0.26 |
+
+Confusion matrix (rows = actual, columns = predicted):
+
+|  | Predicted no | Predicted yes |
+|---|---|---|
+| **Actual no** | 6706 | 86 |
+| **Actual yes** | 717 | 140 |
+
+**Reading the results:** always predicting "no" already gives about 88.8% accuracy on this test set, so the 89.5% accuracy is only a small gain. The model is precise when it predicts "yes" (62%) but finds only 16% of the real subscribers. The train and test AUC are close, so the model is not overfitting. It is underfitting the minority class.
+
+## Limitations and next steps
+
+- Use `class_weight="balanced"` or tune the decision threshold to raise recall for the `yes` class.
+- Try tree-based models (random forest, gradient boosting) and compare them using ROC-AUC and PR-AUC.
+- Use the already-defined `GridSearchCV` helper to tune hyperparameters.
+- The split is random, but the data is time-ordered, so a time-based split would be a more realistic test.
+- Rows with `unknown` values were dropped. Treating `unknown` as its own category would keep about 3,000 more rows.
 
 ## Getting started
 
 ```bash
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>
-pip install -r requirements.txt
+git clone https://github.com/Aishwarya-029/BANK_MARKETING.git
+cd BANK_MARKETING
+pip install pandas numpy matplotlib seaborn scikit-learn jupyter
+jupyter notebook Bank_Marketing.ipynb
 ```
 
-Then open the notebook or run the scripts in the order given in the project structure below.
-
-## Project structure
-
-<!-- Replace with your actual layout. -->
-
-```
-.
-├── data/
-│   └── bank-additional-full.csv
-├── notebooks/
-├── src/
-├── requirements.txt
-└── README.md
-```
+The notebook reads the data from `/content/bank-additional-full.csv` (the Google Colab path). If you run it locally, change that path to where your copy of the CSV is.
 
 ## Tech stack
 
-Python, pandas, NumPy, scikit-learn, Matplotlib / Seaborn
-
-## Acknowledgements
-
-Dataset by Moro, Cortez and Rita (2014), available from the UCI Machine Learning Repository.
+Python, pandas, NumPy, scikit-learn, Matplotlib, Seaborn
